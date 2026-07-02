@@ -41,7 +41,7 @@ type request struct {
 	// Output data.
 	status Status
 
-	// Unstructured output. Only one of these is non-nil.
+	// Unstructured output. Only one of outPayload and readResult is non-nil.
 	outPayload []byte
 	readResult ReadResult
 
@@ -161,7 +161,10 @@ func (r *request) OutputDebug() string {
 		} else {
 			spl := ""
 
-			if r.readResult != nil {
+			if ws, ok := r.readResult.(withSlice); ok {
+				slices, _ := ws.Slices()
+				spl = fmt.Sprintf(" (%d slices)", len(slices))
+			} else if r.readResult != nil {
 				_, pipeOK := r.readResult.(statefulResult)
 				_, fdOK := r.readResult.(seekableResult)
 				if fdOK || pipeOK {

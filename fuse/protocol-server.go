@@ -82,7 +82,14 @@ func (ms *protocolServer) handleRequest(h *operationHandler, req *request) {
 		return
 	}
 	if req.readResult != nil && ms.opts.DisableSplice {
-		req.outPayload, req.status = req.readResult.Bytes(req.outPayload)
+		_, vectored := req.readResult.(withSlice)
+		if !vectored || ms.writev == nil {
+			req.outPayload, req.status = req.readResult.Bytes(req.outPayload)
+			req.readResult.Done()
+			req.readResult = nil
+		}
+	}
+	if req.status > OK && req.readResult != nil {
 		req.readResult.Done()
 		req.readResult = nil
 	}

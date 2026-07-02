@@ -42,6 +42,11 @@ type statefulResult interface {
 	Stateful() (fd uintptr, sz int)
 }
 
+type withSlice interface {
+	// Slices may be called more than once and must return the same data each time.
+	Slices() ([][]byte, Status)
+}
+
 // ReadResultFd is the read return for zero-copy file data.
 type readResultFd struct {
 	// Splice from the following file.
@@ -81,4 +86,37 @@ func (r *readResultFd) Size() int {
 }
 
 func (r *readResultFd) Done() {
+}
+
+// readResultVector is the read return for scatter-gather I/O. It implements
+// the withSlice interface so the kernel write uses writev(2) directly,
+// avoiding a copy into a single contiguous buffer.
+type readResultVector struct {
+	vecs [][]byte
+}
+
+func (r *readResultVector) Size() int {
+	return iovLen(r.vecs)
+}
+
+func (r *readResultVector) Done() {}
+
+// Bytes concatenates the vector into buf, reusing its capacity.
+func (r *readResultVector) Bytes(buf []byte) ([]byte, Status) {
+	buf = buf[:0]
+	for _, v := range r.vecs {
+		buf = append(buf, v...)
+	}
+	return buf, OK
+}
+
+func (r *readResultVector) Slices() ([][]byte, Status) {
+	return r.vecs, OK
+}
+
+// ReadResultVector returns a ReadResult for scatter-gather I/O.
+// When the kernel write path supports it, the buffers are sent via
+// writev(2) without being copied into a single contiguous region.
+func ReadResultVector(vecs [][]byte) ReadResult {
+	return &readResultVector{vecs}
 }
