@@ -42,6 +42,12 @@ type statefulResult interface {
 	Stateful() (fd uintptr, sz int)
 }
 
+// movableResult is a ReadResult whose pages the kernel may move into the
+// inode's page cache instead of copying, when spliced to /dev/fuse.
+type movableResult interface {
+	SpliceMove() bool
+}
+
 // ReadResultFd is the read return for zero-copy file data.
 type readResultFd struct {
 	// Splice from the following file.
