@@ -72,9 +72,8 @@ func (p *Pair) WriteTo(fd uintptr, n int) (int, error) {
 	return p.WriteToFlags(fd, n, 0)
 }
 
-// WriteToFlags is WriteTo with splice(2) flags. /dev/fuse acts on SPLICE_F_MOVE even though the
-// generic pipe-to-file path ignores it: fuse_dev_splice_write() moves the pages into the inode's
-// page cache, which removes them from the page cache of the file they were spliced out of.
+// WriteToFlags is WriteTo with splice(2) flags. /dev/fuse acts on SPLICE_F_MOVE
+// even though the generic pipe-to-file path ignores it.
 func (p *Pair) WriteToFlags(fd uintptr, n int, flags int) (int, error) {
 	var m int
 	var err error

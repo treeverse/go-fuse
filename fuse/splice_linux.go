@@ -10,8 +10,6 @@ import (
 	"os"
 	"syscall"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/hanwen/go-fuse/v2/splice"
 )
 
@@ -37,10 +35,9 @@ func (r *fuseFD) trySplice(req *request, readResult ReadResult) error {
 	// readResult.Size(), so req.outHeaderBuf is correct for the optimistic case.
 	total := len(req.outHeaderBuf) + len(req.outDataBuf) + readResult.Size()
 
-	// The filesystem decides per reply whether its pages may be moved.
 	spliceFlags := 0
-	if m, ok := readResult.(movableResult); ok && m.SpliceMove() {
-		spliceFlags = unix.SPLICE_F_MOVE
+	if f, ok := readResult.(spliceFlaggedResult); ok {
+		spliceFlags = f.SpliceFlags()
 	}
 
 	pair, err := splice.Get()
@@ -98,7 +95,7 @@ func (r *fuseFD) trySplice(req *request, readResult ReadResult) error {
 		// New length.
 		req.serializeHeader(payloadLen)
 
-		return r.trySplice(req, &pipeReadResult{pair: pair, size: payloadLen, move: spliceFlags != 0})
+		return r.trySplice(req, ReadResultPipeFlags(pair, payloadLen, spliceFlags))
 	}
 
 	// Write header + payload to /dev/fuse.
@@ -111,9 +108,9 @@ func (r *fuseFD) trySplice(req *request, readResult ReadResult) error {
 }
 
 type pipeReadResult struct {
-	pair *splice.Pair
-	size int
-	move bool
+	pair  *splice.Pair
+	size  int
+	flags int
 }
 
 func (r *pipeReadResult) Done() {
@@ -137,7 +134,7 @@ func (r *pipeReadResult) Stateful() (fd uintptr, sz int) {
 	return r.pair.ReadFd(), r.size
 }
 
-func (r *pipeReadResult) SpliceMove() bool { return r.move }
+func (r *pipeReadResult) SpliceFlags() int { return r.flags }
 
 // ReadResultPipe returns a [ReadResult] of `size` bytes that was preloaded
 // into the given pipe.  The pipe is discarded with splice.Done()
@@ -146,12 +143,10 @@ func ReadResultPipe(pipe *splice.Pair, size int) ReadResult {
 	return &pipeReadResult{pair: pipe, size: size}
 }
 
-// ReadResultPipeMove is [ReadResultPipe] for a pipe whose pages the kernel may
-// move into the inode's page cache instead of copying into it. A move removes
-// each page from the page cache of the file it came from and waits on its
-// writeback, so use it only for pages the filesystem can lose. Only readahead
-// reads are eligible. A ReadResult can also opt in by implementing
-// SpliceMove() bool.
-func ReadResultPipeMove(pipe *splice.Pair, size int) ReadResult {
-	return &pipeReadResult{pair: pipe, size: size, move: true}
+// ReadResultPipeFlags is [ReadResultPipe] with splice(2) flags. Only
+// SPLICE_F_MOVE has an effect on /dev/fuse: it moves each page out of the
+// source file's page cache, after waiting on its writeback, so use it only for
+// pages the filesystem can lose. Only readahead reads are eligible.
+func ReadResultPipeFlags(pipe *splice.Pair, size, flags int) ReadResult {
+	return &pipeReadResult{pair: pipe, size: size, flags: flags}
 }
