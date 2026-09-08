@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 type hangingRootNode struct {
@@ -47,7 +49,7 @@ func TestAbort(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	connectionID := st.Dev
+	connectionID := unix.Minor(uint64(st.Dev))
 
 	done := make(chan error, 1)
 	go func() {
