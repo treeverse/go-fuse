@@ -42,6 +42,12 @@ type statefulResult interface {
 	Stateful() (fd uintptr, sz int)
 }
 
+// spliceFlaggedResult is a ReadResult carrying splice(2) flags for the write to
+// /dev/fuse.
+type spliceFlaggedResult interface {
+	SpliceFlags() int
+}
+
 // ReadResultFd is the read return for zero-copy file data.
 type readResultFd struct {
 	// Splice from the following file.
